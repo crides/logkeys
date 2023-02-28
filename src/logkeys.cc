@@ -73,6 +73,7 @@ struct key_state_t {
   bool capslock_in_effect = false;
   bool shift_in_effect = false;
   bool altgr_in_effect = false;
+  bool alt_in_effect = false;
   bool ctrl_in_effect = false;  // used for identifying Ctrl+C / Ctrl+D
 } key_state;
 
@@ -434,12 +435,15 @@ bool update_key_state()
     return true;
   }
   else if (key_state.event.value == EV_BREAK) {
-    if (scan_code == KEY_LEFTSHIFT || scan_code == KEY_RIGHTSHIFT)
+    if (scan_code == KEY_LEFTSHIFT || scan_code == KEY_RIGHTSHIFT) {
       key_state.shift_in_effect = false;
-    else if (scan_code == KEY_RIGHTALT)
+    } else if (scan_code == KEY_RIGHTALT) {
       key_state.altgr_in_effect = false;
-    else if (scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL)
+    } else if (scan_code == KEY_LEFTALT) {
+      key_state.alt_in_effect = false;
+    } else if (scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) {
       key_state.ctrl_in_effect = false;
+    }
 
     key_state.repeat_end = key_state.repeats > 0;
     if (key_state.repeat_end)
@@ -468,6 +472,9 @@ bool update_key_state()
     break;
   case KEY_RIGHTALT:
     key_state.altgr_in_effect = true;
+    break;
+  case KEY_LEFTALT:
+    key_state.alt_in_effect = true;
     break;
   case KEY_LEFTCTRL:
   case KEY_RIGHTCTRL:
@@ -530,9 +537,32 @@ FILE* open_log_file()
 // Writes event to log file and returns the increased file size
 int log_event(FILE *out)
 {
+  static bool prev_ctrl = false, prev_altgr = false, prev_shift = false, prev_alt = false;
   int inc_size = 0;
   unsigned short scan_code = key_state.event.code;
   char timestamp[32];  // timestamp string, long enough to hold format "\n%F %T%z > "
+
+  const bool released_shift = prev_shift && !key_state.shift_in_effect;
+  const bool released_ctrl = prev_ctrl && !key_state.ctrl_in_effect;
+  const bool released_altgr = prev_altgr && !key_state.altgr_in_effect;
+  const bool released_alt = prev_alt && !key_state.alt_in_effect;
+
+  if (released_shift) {
+    inc_size += fprintf(out, "</LShft>");
+  }
+  if (released_ctrl) {
+    inc_size += fprintf(out, "</LCtrl>");
+  }
+  if (released_altgr) {
+    inc_size += fprintf(out, "</AltGr>");
+  }
+  if (released_alt) {
+    inc_size += fprintf(out, "</LAlt>");
+  }
+  prev_shift = key_state.shift_in_effect;
+  prev_ctrl = key_state.ctrl_in_effect;
+  prev_altgr = key_state.altgr_in_effect;
+  prev_alt = key_state.alt_in_effect;
 
   if (!key_state.scancode_ok) {  // keycode out of range, log error
     inc_size += fprintf(out, "<E-%x>", scan_code);
@@ -570,7 +600,13 @@ int log_event(FILE *out)
   }
   else if (is_func_key(scan_code)) {
     if (!(args.flags & FLAG_NO_FUNC_KEYS)) {  // only log function keys if --no-func-keys not requested
-      inc_size += fprintf(out, "%ls", func_keys[to_func_keys_index(scan_code)]);
+      if (((scan_code == KEY_LEFTSHIFT || scan_code == KEY_RIGHTSHIFT) && released_shift)
+          || (scan_code == KEY_RIGHTALT && released_altgr)
+          || (scan_code == KEY_LEFTALT && released_alt)
+          || ((scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) && released_ctrl)) {
+      } else {
+        inc_size += fprintf(out, "%ls", func_keys[to_func_keys_index(scan_code)]);
+      }
     }
     else if (scan_code == KEY_SPACE || scan_code == KEY_TAB) {
       inc_size += fprintf(out, " ");  // but always log a single space for Space and Tab keys
