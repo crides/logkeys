@@ -587,11 +587,8 @@ int log_event(FILE *out)
 
   // on key press
   if (scan_code == KEY_ENTER || scan_code == KEY_KPENTER ||
-      (key_state.ctrl_in_effect && (scan_code == KEY_C || scan_code == KEY_D)) ||
       args.timestamp_every) {
-      // on ENTER key or Ctrl+C/Ctrl+D event append timestamp
-    if (key_state.ctrl_in_effect)
-      inc_size += fprintf(out, "%lc", char_keys[to_char_keys_index(scan_code)]);  // log C or D
+      // on ENTER key append timestamp
     if (args.flags & FLAG_NO_TIMESTAMPS)
       inc_size += fprintf(out, "\n");
     else {
