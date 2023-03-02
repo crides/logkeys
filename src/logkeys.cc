@@ -435,18 +435,23 @@ bool update_key_state()
     return true;
   }
   else if (key_state.event.value == EV_BREAK) {
+    bool is_mod = false;
     if (scan_code == KEY_LEFTSHIFT || scan_code == KEY_RIGHTSHIFT) {
       key_state.shift_in_effect = false;
+      is_mod = true;
     } else if (scan_code == KEY_RIGHTALT) {
       key_state.altgr_in_effect = false;
+      is_mod = true;
     } else if (scan_code == KEY_LEFTALT) {
       key_state.alt_in_effect = false;
+      is_mod = true;
     } else if (scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) {
       key_state.ctrl_in_effect = false;
+      is_mod = true;
     }
 
     key_state.repeat_end = key_state.repeats > 0;
-    if (key_state.repeat_end)
+    if (key_state.repeat_end || is_mod)
       return true;
     else
       return update_key_state();
