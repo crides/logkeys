@@ -74,7 +74,8 @@ struct key_state_t {
   bool shift_in_effect = false;
   bool altgr_in_effect = false;
   bool alt_in_effect = false;
-  bool ctrl_in_effect = false;  // used for identifying Ctrl+C / Ctrl+D
+  bool ctrl_in_effect = false;
+  bool meta_in_effect = false;
 } key_state;
 
 // executes cmd and returns string ouput
@@ -448,6 +449,9 @@ bool update_key_state()
     } else if (scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) {
       key_state.ctrl_in_effect = false;
       is_mod = true;
+    } else if (scan_code == KEY_LEFTMETA || scan_code == KEY_RIGHTMETA) {
+      key_state.meta_in_effect = false;
+      is_mod = true;
     }
 
     key_state.repeat_end = key_state.repeats > 0;
@@ -484,6 +488,10 @@ bool update_key_state()
   case KEY_LEFTCTRL:
   case KEY_RIGHTCTRL:
     key_state.ctrl_in_effect = true;
+    break;
+  case KEY_LEFTMETA:
+  case KEY_RIGHTMETA:
+    key_state.meta_in_effect = true;
     break;
   default:
     if (is_char_key(scan_code)) {
@@ -542,32 +550,10 @@ FILE* open_log_file()
 // Writes event to log file and returns the increased file size
 int log_event(FILE *out)
 {
-  static bool prev_ctrl = false, prev_altgr = false, prev_shift = false, prev_alt = false;
+  static bool prev_ctrl = false, prev_altgr = false, prev_shift = false, prev_alt = false, prev_meta = false;
   int inc_size = 0;
   unsigned short scan_code = key_state.event.code;
   char timestamp[32];  // timestamp string, long enough to hold format "\n%F %T%z > "
-
-  const bool released_shift = prev_shift && !key_state.shift_in_effect;
-  const bool released_ctrl = prev_ctrl && !key_state.ctrl_in_effect;
-  const bool released_altgr = prev_altgr && !key_state.altgr_in_effect;
-  const bool released_alt = prev_alt && !key_state.alt_in_effect;
-
-  if (released_shift) {
-    inc_size += fprintf(out, "</LShft>");
-  }
-  if (released_ctrl) {
-    inc_size += fprintf(out, "</LCtrl>");
-  }
-  if (released_altgr) {
-    inc_size += fprintf(out, "</AltGr>");
-  }
-  if (released_alt) {
-    inc_size += fprintf(out, "</LAlt>");
-  }
-  prev_shift = key_state.shift_in_effect;
-  prev_ctrl = key_state.ctrl_in_effect;
-  prev_altgr = key_state.altgr_in_effect;
-  prev_alt = key_state.alt_in_effect;
 
   if (!key_state.scancode_ok) {  // keycode out of range, log error
     inc_size += fprintf(out, "<E-%x>", scan_code);
@@ -582,6 +568,36 @@ int log_event(FILE *out)
         fflush(out);
       }
     }
+  }
+
+  const bool released_shift = prev_shift && !key_state.shift_in_effect;
+  const bool released_ctrl = prev_ctrl && !key_state.ctrl_in_effect;
+  const bool released_altgr = prev_altgr && !key_state.altgr_in_effect;
+  const bool released_alt = prev_alt && !key_state.alt_in_effect;
+  const bool released_meta = prev_meta && !key_state.meta_in_effect;
+
+  if (released_shift) {
+    inc_size += fprintf(out, "</LShft>");
+  }
+  if (released_ctrl) {
+    inc_size += fprintf(out, "</LCtrl>");
+  }
+  if (released_altgr) {
+    inc_size += fprintf(out, "</AltGr>");
+  }
+  if (released_alt) {
+    inc_size += fprintf(out, "</LAlt>");
+  }
+  if (released_meta) {
+    inc_size += fprintf(out, "</LMeta>");
+  }
+  prev_shift = key_state.shift_in_effect;
+  prev_ctrl = key_state.ctrl_in_effect;
+  prev_altgr = key_state.altgr_in_effect;
+  prev_alt = key_state.alt_in_effect;
+  prev_meta = key_state.meta_in_effect;
+
+  if (key_state.repeats) {
     return inc_size;
   }
 
@@ -605,7 +621,8 @@ int log_event(FILE *out)
       if (((scan_code == KEY_LEFTSHIFT || scan_code == KEY_RIGHTSHIFT) && released_shift)
           || (scan_code == KEY_RIGHTALT && released_altgr)
           || (scan_code == KEY_LEFTALT && released_alt)
-          || ((scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) && released_ctrl)) {
+          || ((scan_code == KEY_LEFTCTRL || scan_code == KEY_RIGHTCTRL) && released_ctrl)
+          || ((scan_code == KEY_LEFTMETA || scan_code == KEY_RIGHTMETA) && released_meta)) {
       } else {
         inc_size += fprintf(out, "%ls", func_keys[to_func_keys_index(scan_code)]);
       }
